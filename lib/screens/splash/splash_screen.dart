@@ -7,6 +7,7 @@ import 'package:sunu_task/screens/onboarding/onboarding_screen.dart';
 import 'package:sunu_task/services/storage_service.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../auth/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -55,33 +56,26 @@ class _SplashScreenState extends State<SplashScreen> {
     _timer = Timer( Duration(seconds: 3), _navigateToNextScreen);
   }
 
+  // Dans la méthode _navigateToNextScreen
   void _navigateToNextScreen() {
-    if(!mounted) return;
+    if (!mounted) return;
+
     final bool onboardingComplete = StorageService.instance.isOnboardingComplete;
 
-    /*Navigator.pushReplacement(context,
-      MaterialPageRoute<void>(
-      builder: (context) => onboardingComplete
-          ? const HomeScreen()
-          : const OnboardingScreen(),
-    ),
-    );*/
-
-    // Navigation avec animation
     Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-          onboardingComplete
-              ? const HomeScreen()
-              : const OnboardingScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+            onboardingComplete
+                ? const LoginScreen() // Si onboarding fait -> LoginScreen
+                : const OnboardingScreen(), // Sinon -> OnboardingScreen
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
                 opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: Duration(milliseconds: 300)
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 300)
         )
     );
   }
@@ -102,7 +96,7 @@ class _SplashScreenState extends State<SplashScreen> {
             _buildAppSlogan(),
 
             SizedBox(height: 48,),
-            //Chargement
+
             _buildLoadingIndicator()
           ],
         ),
