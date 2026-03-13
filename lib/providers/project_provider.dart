@@ -3,21 +3,27 @@ import '../models/Project.dart';
 import '../services/storage_service.dart';
 
 class ProjectProvider extends ChangeNotifier {
+  // ===============================
+  // SINGLETON
+  // ===============================
+
+  static final ProjectProvider instance = ProjectProvider._internal();
+  ProjectProvider._internal();
+  factory ProjectProvider() => instance;
+
+  // ===============================
+
   List<Project> _projects = [];
   Project? _selectedProject;
   bool _isLoading = false;
   String? _error;
 
-  // Getters
   List<Project> get projects => List.unmodifiable(_projects);
   Project? get selectedProject => _selectedProject;
   int get projectCount => _projects.length;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  // ===== CRUD =====
-
-  /// Charge les projets d'un utilisateur
   Future<void> loadProjects(String userId) async {
     _isLoading = true;
     _error = null;
@@ -34,14 +40,13 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  /// Crée un nouveau projet
   Future<void> createProject(Project project) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await StorageService.instance.saveProject(project); // ✅ corrigé ici
+      await StorageService.instance.saveProject(project);
       _projects.add(project);
     } catch (e) {
       _error = 'Erreur lors de la création du projet : $e';
@@ -51,7 +56,6 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  /// Met à jour un projet existant
   Future<void> updateProject(Project project) async {
     _isLoading = true;
     _error = null;
@@ -76,7 +80,6 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  /// Supprime un projet
   Future<void> deleteProject(String projectId) async {
     _isLoading = true;
     _error = null;
@@ -97,13 +100,11 @@ class ProjectProvider extends ChangeNotifier {
     }
   }
 
-  /// Sélectionne un projet
   void selectProject(Project? project) {
     _selectedProject = project;
     notifyListeners();
   }
 
-  /// Supprime l'erreur
   void clearError() {
     _error = null;
     notifyListeners();

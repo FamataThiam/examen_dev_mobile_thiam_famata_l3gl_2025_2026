@@ -3,13 +3,12 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../models/Project.dart';
-import '../../services/storage_service.dart';
 import '../../providers/project_provider.dart';
 import '../../providers/auth_provider.dart';
 import 'package:sunu_task/widgets/cards/project_card.dart';
 
 class ProjectFormScreen extends StatefulWidget {
-  final Project? project; // null = création, non-null = modification
+  final Project? project;
 
   const ProjectFormScreen({super.key, this.project});
 
@@ -19,14 +18,10 @@ class ProjectFormScreen extends StatefulWidget {
 
 class _ProjectFormScreenState extends State<ProjectFormScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-  /// Couleur sélectionnée
   late Color _selectedColor;
-
-  // Instances des services/providers
   final ProjectProvider _projectProvider = ProjectProvider();
   final AuthProvider _authProvider = AuthProvider();
 
@@ -35,100 +30,71 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
   @override
   void initState() {
     super.initState();
-
-    /// Pré-remplissage en mode modification
     if (isEdit) {
       _nameController.text = widget.project!.name;
       _descriptionController.text = widget.project!.description ?? '';
-      _selectedColor = widget.project!.color; // Utilise la couleur du projet
+      _selectedColor = widget.project!.color;
     } else {
-      _selectedColor = AppColors.primary; // Couleur par défaut
+      _selectedColor = AppColors.primary;
     }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  /// Sauvegarde du projet
   Future<void> _saveProject() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_formKey.currentState!.validate()) {
+      final user = _authProvider.currentUser;
 
-    // Récupération de l'ID de l'utilisateur actuel
-    final userId = _authProvider.currentUser?.id;
-    if (userId == null) return;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Erreur : Utilisateur non connecté")),
+        );
+        return;
+      }
 
-    final project = Project(
-      id: isEdit ? widget.project!.id : const Uuid().v4(),
-      userId: userId, // Obligatoire selon le modèle
-      name: _nameController.text.trim(),
-      description: _descriptionController.text.trim(),
-      color: _selectedColor,
-      createdDate: isEdit ? widget.project!.createdDate : DateTime.now(),
-    );
+      final project = Project(
+        id: isEdit ? widget.project!.id : const Uuid().v4(),
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        color: _selectedColor,
+        userId: user.id,
+        createdDate: isEdit ? widget.project!.createdDate : DateTime.now(),
+      );
 
-    // Utilisation du provider pour mettre à jour l'UI et le stockage
-    if (isEdit) {
-      await _projectProvider.updateProject(project);
-    } else {
-      await _projectProvider.createProject(project);
+      try {
+        if (isEdit) {
+          // Utilise la méthode updateProject du provider
+          await _projectProvider.updateProject(project);
+        } else {
+          // ATTENTION : La méthode s'appelle createProject dans votre provider
+          await _projectProvider.createProject(project);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(isEdit ? "Projet mis à jour" : "Projet créé avec succès")),
+          );
+
+          // REDIRECTION VERS LE DASHBOARD (Retour en arrière)
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Erreur lors de l'enregistrement")),
+          );
+        }
+      }
     }
-
-    if (mounted) {
-      Navigator.pop(context);
-    }
-  }
-
-  /// Widget pour afficher un cercle de couleur
-  Widget _colorItem(Color color) {
-    final selected = color.value == _selectedColor.value;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedColor = color;
-        });
-      },
-      child: CircleAvatar(
-        radius: selected ? 22 : 18,
-        backgroundColor: color,
-        child: selected
-            ? const Icon(Icons.check, color: Colors.white)
-            : null,
-      ),
-    );
-  }
-
-  /// Sélecteur de couleurs (8 cercles dans un Wrap)
-  Widget _buildColorSelector() {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _colorItem(AppColors.primary),
-        _colorItem(AppColors.secondary),
-        _colorItem(AppColors.info),
-        _colorItem(AppColors.success),
-        _colorItem(AppColors.warning),
-        _colorItem(AppColors.error),
-        _colorItem(AppColors.priorityMedium),
-        _colorItem(AppColors.priorityHigh),
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Projet temporaire pour l'aperçu en temps réel
+    // Preview pour la carte
     final previewProject = Project(
-      id: "preview",
-      userId: "preview_user",
+      id: 'preview',
       name: _nameController.text.isEmpty ? "Nom du projet" : _nameController.text,
-      description: _descriptionController.text.isEmpty ? "Description du projet" : _descriptionController.text,
+      description: _descriptionController.text,
       color: _selectedColor,
+      userId: '1',
       createdDate: DateTime.now(),
     );
 
@@ -137,64 +103,33 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
         title: Text(isEdit ? "Modifier le projet" : "Nouveau projet"),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// Nom du projet (Obligatoire, min 3 car.)
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: "Nom du projet",
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (_) => setState(() {}), // Pour rafraîchir l'aperçu
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return "Nom obligatoire";
-                  if (value.trim().length < 3) return "Minimum 3 caractères";
-                  return null;
-                },
+                decoration: const InputDecoration(labelText: "Nom du projet", border: OutlineInputBorder()),
+                onChanged: (_) => setState(() {}),
+                validator: (value) => (value == null || value.isEmpty) ? "Le nom est requis" : null,
               ),
-              const SizedBox(height: 16),
-
-              /// Description (Multiligne, optionnel)
+              const SizedBox(height: 20),
               TextFormField(
                 controller: _descriptionController,
+                decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder()),
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: "Description",
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (_) => setState(() {}), // Pour rafraîchir l'aperçu
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 25),
-
-              /// Sélecteur de couleur
-              const Text(
-                "Couleur du projet",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 12),
+              const Text("Couleur", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
               _buildColorSelector(),
-
-              const SizedBox(height: 35),
-
-              /// Aperçu en temps réel avec ProjectCard
-              const Text(
-                "Aperçu",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 12),
-              ProjectCard(
-                project: previewProject,
-                taskCount: 0, // Paramètre requis corrigé
-              ),
-
+              const SizedBox(height: 30),
+              const Text("Aperçu"),
+              ProjectCard(project: previewProject, taskCount: 0),
               const SizedBox(height: 40),
-
-              /// Bouton de validation
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -203,17 +138,33 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: _saveProject,
-                  child: Text(
-                    isEdit ? "Enregistrer les modifications" : "Créer le projet",
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  onPressed: _saveProject, // Appelle la fonction de sauvegarde
+                  child: Text(isEdit ? "ENREGISTRER" : "CRÉER LE PROJET"),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildColorSelector() {
+    final colors = [AppColors.primary, Colors.red, Colors.orange, Colors.green, Colors.purple, Colors.blue];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: colors.map((color) => GestureDetector(
+        onTap: () => setState(() => _selectedColor = color),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: _selectedColor == color ? Colors.black : Colors.transparent, width: 2),
+          ),
+        ),
+      )).toList(),
     );
   }
 }
