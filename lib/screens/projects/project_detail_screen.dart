@@ -10,6 +10,7 @@ import '../../widgets/cards/task_card.dart';
 import '../tasks/task_form_screen.dart';
 import 'project_form_screen.dart';
 
+
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
 
@@ -151,7 +152,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       body: ListenableBuilder(
         listenable: _taskProvider,
         builder: (context, _) {
-          final projectTasks = _taskProvider.tasks
+          // ✅ allTasks ignore les filtres statut/priorité de TasksTab
+          final projectTasks = _taskProvider.allTasks
               .where((t) => t.projectId == widget.project.id)
               .toList();
 

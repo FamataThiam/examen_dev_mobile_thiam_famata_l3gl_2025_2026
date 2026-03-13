@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:sunu_task/models/Task.dart';
 import 'package:sunu_task/providers/task_provider.dart';
+import 'package:sunu_task/providers/project_provider.dart';
 import 'package:sunu_task/core/constants/app_colors.dart';
+import 'package:sunu_task/screens/tasks/task_detail_screen.dart';
 
 class TasksTab extends StatefulWidget {
   const TasksTab({super.key});
@@ -12,16 +14,14 @@ class TasksTab extends StatefulWidget {
 
 class _TasksTabState extends State<TasksTab> {
   final TaskProvider _taskProvider = TaskProvider();
+  final ProjectProvider _projectProvider = ProjectProvider();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          // 1. Barre de Filtrage (Statut et Priorité)
           _buildFilterBar(),
-
-          // 2. Liste des tâches avec ListenableBuilder
           Expanded(
             child: ListenableBuilder(
               listenable: _taskProvider,
@@ -32,12 +32,10 @@ class _TasksTabState extends State<TasksTab> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                // GESTION DE L'ÉTAT VIDE
                 if (tasks.isEmpty) {
                   return _buildEmptyState();
                 }
 
-                // AFFICHAGE DE LA LISTE FILTRÉE ET TRIÉE
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: tasks.length,
@@ -54,8 +52,6 @@ class _TasksTabState extends State<TasksTab> {
     );
   }
 
-  // --- Widgets de construction ---
-
   Widget _buildFilterBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -64,10 +60,9 @@ class _TasksTabState extends State<TasksTab> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            // Filtre Statut
             DropdownButton<TaskStatus?>(
               value: _taskProvider.statusFilter,
-              hint: const Text("Statut"),
+              hint: const Text("Tous les statuts"),
               underline: const SizedBox(),
               onChanged: (val) => _taskProvider.setStatusFilter(val),
               items: [
@@ -76,10 +71,9 @@ class _TasksTabState extends State<TasksTab> {
               ],
             ),
             const SizedBox(width: 16),
-            // Filtre Priorité
             DropdownButton<TaskPriority?>(
               value: _taskProvider.priorityFilter,
-              hint: const Text("Priorité"),
+              hint: const Text("Toutes priorités"),
               underline: const SizedBox(),
               onChanged: (val) => _taskProvider.setPriorityFilter(val),
               items: [
@@ -92,7 +86,7 @@ class _TasksTabState extends State<TasksTab> {
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.red),
                 onPressed: () => _taskProvider.clearFilters(),
-              )
+              ),
           ],
         ),
       ),
@@ -104,39 +98,68 @@ class _TasksTabState extends State<TasksTab> {
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: ListTile(
-        leading: Icon(
-          _getStatusIcon(task.status),
-          color: _getStatusColor(task.status),
-        ),
-        title: Text(
-          task.title,
-          style: TextStyle(
-            decoration: task.status == TaskStatus.done ? TextDecoration.lineThrough : null,
-            fontWeight: FontWeight.w600,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        // ✅ Navigation vers TaskDetailScreen au tap
+        onTap: () {
+          // Trouver le projet associé à la tâche
+          final project = _projectProvider.projects
+              .where((p) => p.id == task.projectId)
+              .firstOrNull;
+
+          if (project != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TaskDetailScreen(task: task, project: project),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Projet introuvable")),
+            );
+          }
+        },
+        child: ListTile(
+          leading: Icon(
+            _getStatusIcon(task.status),
+            color: _getStatusColor(task.status),
           ),
-        ),
-        subtitle: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _getPriorityColor(task.priority).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                task.priority.name.toUpperCase(),
-                style: TextStyle(color: _getPriorityColor(task.priority), fontSize: 10, fontWeight: FontWeight.bold),
-              ),
+          title: Text(
+            task.title,
+            style: TextStyle(
+              decoration: task.status == TaskStatus.done
+                  ? TextDecoration.lineThrough
+                  : null,
+              fontWeight: FontWeight.w600,
             ),
-          ],
-        ),
-        trailing: Checkbox(
-          value: task.status == TaskStatus.done,
-          onChanged: (val) {
-            final newStatus = val! ? TaskStatus.done : TaskStatus.todo;
-            _taskProvider.updateTaskStatus(task.id, newStatus);
-          },
+          ),
+          subtitle: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _getPriorityColor(task.priority).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  task.priority.name.toUpperCase(),
+                  style: TextStyle(
+                    color: _getPriorityColor(task.priority),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          trailing: Checkbox(
+            value: task.status == TaskStatus.done,
+            onChanged: (val) {
+              final newStatus = val! ? TaskStatus.done : TaskStatus.todo;
+              _taskProvider.updateTaskStatus(task.id, newStatus);
+            },
+          ),
         ),
       ),
     );
@@ -149,14 +172,14 @@ class _TasksTabState extends State<TasksTab> {
         children: [
           Icon(Icons.assignment_turned_in_outlined, size: 70, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          const Text("Aucune tâche trouvée", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const Text("Ajustez vos filtres ou créez une tâche.", style: TextStyle(color: Colors.grey)),
+          const Text("Aucune tâche trouvée",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const Text("Ajustez vos filtres ou créez une tâche.",
+              style: TextStyle(color: Colors.grey)),
         ],
       ),
     );
   }
-
-  // --- Fonctions utilitaires pour l'UI ---
 
   Color _getStatusColor(TaskStatus status) {
     switch (status) {
